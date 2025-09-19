@@ -1,31 +1,27 @@
-RECIPES = {
-    "spaghetti bolognese": {
-        "ingredients": ["spaghetti", "tomates", "viande hachée", "oignon", "ail"],
-        "actions": [
-            "éplucher l'oignon",
-            "émincer l'oignon",
-            "cuire la viande hachée",
-            "ajouter les tomates",
-            "mélanger la sauce",
-            "faire cuire les spaghetti",
-            "assembler spaghetti + sauce"
-        ]
+# Dictionnaire des recettes
+# Chaque recette contient une liste d'ingrédients et des méthodes par ingrédient
+recipes = {
+    "salad": {
+        "ingredients": ["salad", "tomato", "onion", "cucumber"],
+        "methods": {
+            "salad": ["rinse", "tear"],
+            "tomato": ["rinse", "chop"],
+            "onion": ["peel", "chop"],
+            "cucumber": ["rinse", "slice"]
+        }
     },
-    "salade": {
-        "ingredients": ["laitue", "tomates", "concombre"],
-        "actions": [
-            "laver la laitue",
-            "couper les tomates",
-            "couper le concombre",
-            "mélanger tous les ingrédients"
-        ]
-    },
-    "sandwich": {
-        "ingredients": ["pain", "fromage", "jambon"],
-        "actions": [
-            "mettre le fromage sur le pain",
-            "mettre le jambon sur le fromage",
-            "fermer le sandwich"
-        ]
+    "burger": {
+        "ingredients": ["bread", "beef", "cheese", "tomato", "onion"],
+        "methods": {
+            "bread": ["toast"],
+            "beef": ["grill"],
+            "cheese": ["slice"],
+            "tomato": ["rinse", "slice"],
+            "onion": ["peel", "slice"]
+        }
     }
 }
+
+def perform_method(ingredient, method):
+    """Simule une action sur un ingrédient"""
+    print(f"{method.capitalize()}ing {ingredient}...")
