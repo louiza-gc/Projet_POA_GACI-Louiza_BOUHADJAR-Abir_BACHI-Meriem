@@ -19,5 +19,13 @@ RECIPES = {
             "couper le concombre",
             "mélanger tous les ingrédients"
         ]
+    },
+    "sandwich": {
+        "ingredients": ["pain", "fromage", "jambon"],
+        "actions": [
+            "mettre le fromage sur le pain",
+            "mettre le jambon sur le fromage",
+            "fermer le sandwich"
+        ]
     }
 }
