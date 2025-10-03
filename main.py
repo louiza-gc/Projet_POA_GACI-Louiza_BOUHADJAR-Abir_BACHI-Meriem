@@ -18,11 +18,12 @@ def show_order_served():
 
 # ------------------ Agent Chef ------------------
 class ChefAgent:
-    def __init__(self, canvas, chef_shape, output_widget):
+    def __init__(self, canvas, chef_shape, output_widget, name="Chef"):
         self.canvas = canvas
         self.chef = chef_shape
         self.output = output_widget
         self.x, self.y = self.canvas.coords(self.chef)[:2]
+        self.name = name
 
     def move_to(self, target_x, target_y, speed=5):
         while True:
@@ -44,26 +45,76 @@ class ChefAgent:
         self.x, self.y = self.canvas.coords(self.chef)[:2]
 
     def pick_ingredient(self, ingredient_shape, ing_name):
-        self.output.insert(tk.END, f"Picking {ing_name}...\n")
+        self.output.insert(tk.END, f"{self.name} prend {ing_name}...\n")
         self.output.yview_moveto(1)
         self.canvas.itemconfig(ingredient_shape, fill="green")
         self.canvas.update()
         time.sleep(0.5)
 
     def perform_method(self, ing_name, method):
-        self.output.insert(tk.END, f"{method.capitalize()}ing {ing_name}...\n")
+        self.output.insert(tk.END, f"{self.name} {method} {ing_name}...\n")
         self.output.yview_moveto(1)
         self.canvas.update()
         time.sleep(0.5)
 
     def serve(self, counter_shape):
         self.canvas.itemconfig(counter_shape, fill="red")
-        self.output.insert(tk.END, "\nChef a servi le plat au comptoir !\n")
+        self.output.insert(tk.END, f"\n{self.name} a servi le plat au comptoir !\n")
         self.output.yview_moveto(1)
         self.canvas.update()
         show_order_served()
 
-# ------------------ Préparer le plat via l'agent ------------------
+    def cooperate(self, other_agent, dish_order, ingredients_shapes, prep_pos, counter_pos, counter_shape):
+        """Ce chef coopère avec un autre agent pour préparer une recette"""
+        self.output.delete("1.0", tk.END)
+
+        if dish_order not in recipes:
+            self.output.insert(tk.END, "Recette inconnue...\n")
+            return
+
+        recipe = recipes[dish_order]
+        required_ingredients = recipe["ingredients"]
+        methods = recipe["methods"]
+
+        # Répartition des ingrédients
+        for i, ing in enumerate(required_ingredients):
+            if ing in available_ingredients:
+                x1, y1, x2, y2 = self.canvas.coords(ingredients_shapes[ing])
+                if i % 2 == 0:  # pair → ce chef
+                    self.move_to(x1, y1)
+                    self.pick_ingredient(ingredients_shapes[ing], ing)
+                else:  # impair → autre agent
+                    other_agent.move_to(x1, y1)
+                    other_agent.pick_ingredient(ingredients_shapes[ing], ing)
+
+        # Les deux vont au plan de travail
+        self.move_to(prep_pos[0], prep_pos[1])
+        other_agent.move_to(prep_pos[0] + 50, prep_pos[1])  # petit décalage
+
+        cours_text = self.canvas.create_text(
+            (prep_pos[0] + prep_pos[0] + 150) // 2,
+            prep_pos[1] + 20,
+            text="Préparation ensemble...",
+            font=("Arial", 12, "bold"),
+            fill="black"
+        )
+        self.canvas.update()
+
+        # Préparation par ce chef
+        for ing in required_ingredients:
+            if ing in methods:
+                for action in methods[ing]:
+                    self.perform_method(ing, action)
+
+        self.canvas.delete(cours_text)
+        self.canvas.update()
+
+        # Service par l'autre chef
+        other_agent.move_to(counter_pos[0], counter_pos[1])
+        other_agent.serve(counter_shape)
+
+
+# ------------------ Préparer le plat via un seul agent ------------------
 def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep_pos, counter_pos, counter_shape):
     output_widget.delete("1.0", tk.END)
 
@@ -104,10 +155,11 @@ def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep
     chef_agent.move_to(counter_pos[0], counter_pos[1])
     chef_agent.serve(counter_shape)
 
+
 # ------------------ TKINTER GUI ------------------
 root = tk.Tk()
 root.title("Overcooked Switch game")
-root.geometry("900x600")  # taille de départ
+root.geometry("900x600")
 
 # Frame principale avec scrollbar
 main_frame = tk.Frame(root)
@@ -141,9 +193,13 @@ output.pack(pady=10)
 canvas = tk.Canvas(content_frame, width=850, height=400, bg="lightblue")
 canvas.pack(pady=10)
 
-# Chef
-chef_shape = canvas.create_rectangle(20, 350, 60, 390, fill="red")
-chef_agent = ChefAgent(canvas, chef_shape, output)
+# Chef 1 (rouge)
+chef1_shape = canvas.create_rectangle(20, 350, 60, 390, fill="red")
+chef1 = ChefAgent(canvas, chef1_shape, output, name="Chef 1")
+
+# Chef 2 (bleu)
+chef2_shape = canvas.create_rectangle(100, 350, 140, 390, fill="blue")
+chef2 = ChefAgent(canvas, chef2_shape, output, name="Chef 2")
 
 # Ingrédients
 ingredients_shapes = {}
@@ -180,14 +236,14 @@ counter_y2 = 150
 counter = canvas.create_rectangle(counter_x1, counter_y1, counter_x2, counter_y2, fill="white")
 canvas.create_text((counter_x1 + counter_x2)//2, counter_y1 - 10, text="Comptoir", font=("Arial", 12, "bold"))
 
-# Bouton
-button = tk.Button(
+# Bouton pour un seul chef
+button_single = tk.Button(
     content_frame,
-    text="Prepare Dish",
+    text="Prepare Dish (Chef 1)",
     font=("Arial", 14),
     command=lambda: prepare_dish(
         entry.get().strip().lower(),
-        chef_agent,
+        chef1,
         ingredients_shapes,
         output,
         (prep_x1, prep_y1),
@@ -195,6 +251,22 @@ button = tk.Button(
         counter
     )
 )
-button.pack(pady=10)
+button_single.pack(pady=5)
+
+# Bouton coopération
+button_coop = tk.Button(
+    content_frame,
+    text="Prepare Together (Chef 1 + Chef 2)",
+    font=("Arial", 14),
+    command=lambda: chef1.cooperate(
+        chef2,
+        entry.get().strip().lower(),
+        ingredients_shapes,
+        (prep_x1, prep_y1),
+        (counter_x1, counter_y1),
+        counter
+    )
+)
+button_coop.pack(pady=5)
 
 root.mainloop()
