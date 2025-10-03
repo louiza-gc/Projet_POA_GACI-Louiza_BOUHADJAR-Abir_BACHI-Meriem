@@ -2,7 +2,6 @@ import tkinter as tk
 import time
 from recipes import recipes  # Assure-toi que ton fichier recipes.py existe
 
-# Liste d'ingrédients disponibles
 available_ingredients = [
     "salad", "tomato", "onion", "carrot", "pepper",
     "chicken", "beef", "fish", "egg",
@@ -17,32 +16,55 @@ def show_order_served():
     label = tk.Label(served_window, text="Commande servie !", font=("Arial", 24), fg="black")
     label.pack(expand=True)
 
-# ------------------ Déplacement et action du chef ------------------
-def move_chef_to(canvas, chef, target_x, target_y, speed=5):
-    while True:
-        cx1, cy1, cx2, cy2 = canvas.coords(chef)
-        dx = dy = 0
-        if cx1 < target_x:
-            dx = min(speed, target_x - cx1)
-        elif cx1 > target_x:
-            dx = -min(speed, cx1 - target_x)
-        if cy1 < target_y:
-            dy = min(speed, target_y - cy1)
-        elif cy1 > target_y:
-            dy = -min(speed, cy1 - target_y)
-        if dx == 0 and dy == 0:
-            break
-        canvas.move(chef, dx, dy)
-        canvas.update()
-        time.sleep(0.01)
+# ------------------ Agent Chef ------------------
+class ChefAgent:
+    def __init__(self, canvas, chef_shape, output_widget):
+        self.canvas = canvas
+        self.chef = chef_shape
+        self.output = output_widget
+        self.x, self.y = self.canvas.coords(self.chef)[:2]
 
-def perform_action(canvas, ingredient_shape):
-    canvas.itemconfig(ingredient_shape, fill="green")
-    canvas.update()
-    time.sleep(0.5)
+    def move_to(self, target_x, target_y, speed=5):
+        while True:
+            cx1, cy1, cx2, cy2 = self.canvas.coords(self.chef)
+            dx = dy = 0
+            if cx1 < target_x:
+                dx = min(speed, target_x - cx1)
+            elif cx1 > target_x:
+                dx = -min(speed, cx1 - target_x)
+            if cy1 < target_y:
+                dy = min(speed, target_y - cy1)
+            elif cy1 > target_y:
+                dy = -min(speed, cy1 - target_y)
+            if dx == 0 and dy == 0:
+                break
+            self.canvas.move(self.chef, dx, dy)
+            self.canvas.update()
+            time.sleep(0.01)
+        self.x, self.y = self.canvas.coords(self.chef)[:2]
 
-# ------------------ Préparer le plat ------------------
-def prepare_dish(dish_order, canvas, chef, ingredients_shapes, output_widget, prep_pos, counter_pos, counter_shape):
+    def pick_ingredient(self, ingredient_shape, ing_name):
+        self.output.insert(tk.END, f"Picking {ing_name}...\n")
+        self.output.yview_moveto(1)
+        self.canvas.itemconfig(ingredient_shape, fill="green")
+        self.canvas.update()
+        time.sleep(0.5)
+
+    def perform_method(self, ing_name, method):
+        self.output.insert(tk.END, f"{method.capitalize()}ing {ing_name}...\n")
+        self.output.yview_moveto(1)
+        self.canvas.update()
+        time.sleep(0.5)
+
+    def serve(self, counter_shape):
+        self.canvas.itemconfig(counter_shape, fill="red")
+        self.output.insert(tk.END, "\nChef a servi le plat au comptoir !\n")
+        self.output.yview_moveto(1)
+        self.canvas.update()
+        show_order_served()
+
+# ------------------ Préparer le plat via l'agent ------------------
+def prepare_dish(dish_order, chef_agent, ingredients_shapes, output_widget, prep_pos, counter_pos, counter_shape):
     output_widget.delete("1.0", tk.END)
 
     if dish_order not in recipes:
@@ -55,15 +77,12 @@ def prepare_dish(dish_order, canvas, chef, ingredients_shapes, output_widget, pr
 
     for ing in required_ingredients:
         if ing in available_ingredients:
-            output_widget.insert(tk.END, f"Going to pick {ing}...\n")
-            output_widget.yview_moveto(1)
-            output_widget.update()
             x1, y1, x2, y2 = canvas.coords(ingredients_shapes[ing])
-            move_chef_to(canvas, chef, x1, y1)
-            perform_action(canvas, ingredients_shapes[ing])
+            chef_agent.move_to(x1, y1)
+            chef_agent.pick_ingredient(ingredients_shapes[ing], ing)
 
     # Plan de travail
-    move_chef_to(canvas, chef, prep_pos[0], prep_pos[1])
+    chef_agent.move_to(prep_pos[0], prep_pos[1])
     cours_text = canvas.create_text(
         (prep_pos[0]+prep_pos[0]+150)//2,
         prep_pos[1]+20,
@@ -76,22 +95,14 @@ def prepare_dish(dish_order, canvas, chef, ingredients_shapes, output_widget, pr
     for ing in required_ingredients:
         if ing in methods:
             for action in methods[ing]:
-                output_widget.insert(tk.END, f"{action.capitalize()}ing {ing}...\n")
-                output_widget.yview_moveto(1)
-                output_widget.update()
-                time.sleep(0.5)
+                chef_agent.perform_method(ing, action)
 
     canvas.delete(cours_text)
     canvas.update()
 
     # Comptoir
-    move_chef_to(canvas, chef, counter_pos[0], counter_pos[1])
-    canvas.itemconfig(counter_shape, fill="red")
-    output_widget.insert(tk.END, "\nChef a servi le plat au comptoir !\n")
-    output_widget.yview_moveto(1)
-    canvas.update()
-
-    show_order_served()
+    chef_agent.move_to(counter_pos[0], counter_pos[1])
+    chef_agent.serve(counter_shape)
 
 # ------------------ TKINTER GUI ------------------
 root = tk.Tk()
@@ -131,7 +142,8 @@ canvas = tk.Canvas(content_frame, width=850, height=400, bg="lightblue")
 canvas.pack(pady=10)
 
 # Chef
-chef = canvas.create_rectangle(20, 350, 60, 390, fill="red")
+chef_shape = canvas.create_rectangle(20, 350, 60, 390, fill="red")
+chef_agent = ChefAgent(canvas, chef_shape, output)
 
 # Ingrédients
 ingredients_shapes = {}
@@ -175,8 +187,7 @@ button = tk.Button(
     font=("Arial", 14),
     command=lambda: prepare_dish(
         entry.get().strip().lower(),
-        canvas,
-        chef,
+        chef_agent,
         ingredients_shapes,
         output,
         (prep_x1, prep_y1),
